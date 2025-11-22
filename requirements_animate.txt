@@ -1,5 +1,4 @@
 decord
-peft
 onnxruntime
 pandas
 matplotlib

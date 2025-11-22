@@ -1,4 +1,5 @@
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
+import gc
 import logging
 import math
 import os
@@ -633,13 +634,28 @@ class WanAnimate:
 
                     x0 = latents
 
+                # AGGRESSIVE memory cleanup before VAE decode
+                # Delete intermediate tensors from diffusion
+                del noise_pred, latents, temp_x0
+                if 'conditioning_latents' in locals():
+                    del conditioning_latents
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                gc.collect()
+                
                 x0 = [x.to(dtype=torch.float32) for x in x0]
-                out_frames = torch.stack(self.vae.decode([x0[0][:, 1:]]))
+                
+                # Move to CPU immediately after decode to free GPU memory
+                out_frames = torch.stack(self.vae.decode([x0[0][:, 1:]])).cpu()
+                
+                # Clean up x0 after decode
+                del x0
+                torch.cuda.empty_cache()
                 
                 if start != 0:
                     out_frames = out_frames[:, :, refert_num:]
 
-                all_out_frames.append(out_frames.cpu())
+                all_out_frames.append(out_frames)
 
                 start += clip_len - refert_num
                 end += clip_len - refert_num

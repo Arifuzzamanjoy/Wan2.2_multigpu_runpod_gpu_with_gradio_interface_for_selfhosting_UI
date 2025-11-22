@@ -4,4 +4,60 @@ __pycache__/
 tmp_examples*
 new_checkpoint*
 batch_test*
-nohup*
+nohup*nohup*
+
+# Python
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+venv_wan22/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Logs
+*.log
+*.out
+
+# Cache directories
+/home/caches/
+outputs/
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# OS files
+Thumbs.db
+
+# Model checkpoints (large files)
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+
+# ONNX models
+*.onnx
+
+# IDE
+.idea/
+
+# Temporary dependency files
+=0.20.3
+=1.1.1
+=1.23.5,
+=4.9.0.80
+
+# Generated videos (too large for git)
+*.mp4
+*.avi
+*.mov

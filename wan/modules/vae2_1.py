@@ -1,4 +1,5 @@
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
+import gc
 import logging
 
 import torch
@@ -655,9 +656,44 @@ class Wan2_1_VAE:
             ]
 
     def decode(self, zs):
+        # Clear CUDA cache before decoding to free fragmented memory
+        torch.cuda.empty_cache()
+        gc.collect()
+        
+        # For 48GB GPUs: temporarily move decoder to CPU if OOM risk
+        decoder_device = next(self.model.decoder.parameters()).device
+        try_cpu_decode = False
+        
         with amp.autocast(dtype=self.dtype):
-            return [
-                self.model.decode(u.unsqueeze(0),
-                                  self.scale).float().clamp_(-1, 1).squeeze(0)
-                for u in zs
-            ]
+            results = []
+            for u in zs:
+                try:
+                    decoded = self.model.decode(u.unsqueeze(0),
+                                              self.scale).float().clamp_(-1, 1).squeeze(0)
+                    results.append(decoded)
+                    # Clear cache after each decode to manage memory
+                    torch.cuda.empty_cache()
+                except RuntimeError as e:
+                    if "out of memory" in str(e).lower() and not try_cpu_decode:
+                        # OOM detected - switch to CPU decode
+                        print(f"⚠️  GPU OOM during VAE decode, switching to CPU decode...")
+                        torch.cuda.empty_cache()
+                        gc.collect()
+                        
+                        # Move entire model to CPU (decoder + scale parameters)
+                        self.model.cpu()
+                        scale_cpu = [s.cpu() for s in self.scale]
+                        torch.cuda.empty_cache()
+                        
+                        # Decode on CPU
+                        u_cpu = u.cpu()
+                        decoded = self.model.decode(u_cpu.unsqueeze(0),
+                                                   scale_cpu).float().clamp_(-1, 1).squeeze(0)
+                        results.append(decoded.to(decoder_device))
+                        
+                        # Move model back to GPU
+                        self.model.to(decoder_device)
+                        try_cpu_decode = True
+                    else:
+                        raise
+            return results
