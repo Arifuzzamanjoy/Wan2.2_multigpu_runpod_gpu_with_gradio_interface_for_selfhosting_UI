@@ -22,6 +22,7 @@ import logging
 import subprocess
 import shutil
 import gradio as gr
+import torch
 from pathlib import Path
 from datetime import datetime
 from huggingface_hub import snapshot_download, hf_hub_download
@@ -527,11 +528,17 @@ def create_interface():
                 gr.Markdown("### ⚙️ Generation Settings")
                 
                 with gr.Accordion("🖥️ GPU & Performance", open=True):
+                    # Auto-detect available GPUs
+                    available_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
+                    gpu_choices = [1, 2, 3, 4, 5, 8]
+                    # Filter to only show available GPUs
+                    gpu_choices = [x for x in gpu_choices if x <= available_gpus]
+                    
                     num_gpus = gr.Dropdown(
                         label="Number of GPUs",
-                        choices=[1, 2, 4, 5, 8],
-                        value=2,
-                        info="More GPUs = faster generation"
+                        choices=gpu_choices,
+                        value=min(available_gpus, 3),  # Default to available GPUs (max 3)
+                        info=f"💡 {available_gpus} GPU(s) detected. More GPUs = faster generation"
                     )
                     
                     sample_steps = gr.Slider(
