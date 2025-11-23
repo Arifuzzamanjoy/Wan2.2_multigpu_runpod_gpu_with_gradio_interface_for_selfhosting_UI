@@ -181,7 +181,7 @@ def run_animate_3gpu(
     cmd = [
         "torchrun",
         "--nnodes", "1",
-        "--nproc_per_node", "3",  # 3 GPUs
+        "--nproc_per_node", "4",  # 3 GPUs
         "--master_port", "29500",
         "generate.py",
         "--task", "animate-14B",
