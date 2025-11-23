@@ -23,6 +23,7 @@ import subprocess
 import shutil
 import gradio as gr
 import torch
+import re
 from pathlib import Path
 from datetime import datetime
 from huggingface_hub import snapshot_download, hf_hub_download
@@ -232,15 +233,55 @@ def generate_video(
         
         progress(0.1, desc="⚙️ Running generation (this may take several minutes)...")
         
-        # Run generation
-        result = subprocess.run(
+        # Run generation with real-time output
+        logging.info(f"🚀 Starting generation command: {' '.join(cmd)}")
+        
+        process = subprocess.Popen(
             cmd,
             env=env,
-            check=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
+            bufsize=1,
             cwd="/workspace/Wan2.2"
         )
+        
+        # Stream output to terminal
+        output_lines = []
+        step_count = 0
+        total_steps = sample_steps
+        
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                # Print to terminal for visibility
+                print(line)
+                output_lines.append(line)
+                
+                # Update progress based on sampling steps
+                if "sampling step" in line.lower() or "step" in line.lower():
+                    try:
+                        # Try to extract step number
+                        import re
+                        match = re.search(r'step[:\s]+(\d+)', line.lower())
+                        if match:
+                            step_count = int(match.group(1))
+                            progress_pct = 0.1 + (0.8 * step_count / total_steps)
+                            progress(progress_pct, desc=f"🎬 Generating... Step {step_count}/{total_steps}")
+                    except:
+                        pass
+                
+                # Keep last 100 lines
+                if len(output_lines) > 100:
+                    output_lines.pop(0)
+        
+        process.wait()
+        
+        if process.returncode != 0:
+            error_output = '\n'.join(output_lines[-50:])  # Last 50 lines
+            logging.error(f"Generation failed with exit code {process.returncode}")
+            logging.error(error_output)
+            return None, f"❌ Generation failed (exit code {process.returncode}):\n\n{error_output}"
         
         progress(0.9, desc="🔍 Looking for generated video...")
         
@@ -252,14 +293,14 @@ def generate_video(
             # Get the most recent video
             latest_video = max(video_files, key=lambda p: p.stat().st_mtime)
             progress(1.0, desc="✅ Generation completed!")
+            logging.info(f"✅ Video generated: {latest_video}")
             return str(latest_video), f"✅ Video generated successfully!\n\nPath: {latest_video}"
         else:
+            logging.warning("Generation completed but no video file found")
             return None, "⚠️ Generation completed but no video file found"
             
-    except subprocess.CalledProcessError as e:
-        error_msg = f"❌ Generation failed:\n{e.stderr[-2000:]}"  # Last 2000 chars
-        return None, error_msg
     except Exception as e:
+        logging.error(f"Generation error: {str(e)}")
         return None, f"❌ Error: {str(e)}"
 
 
